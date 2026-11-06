@@ -19,7 +19,11 @@ jobs:
           KS_ALIAS: almisbar
           KS_FILE: almisbar-upload.jks
         run: |
-          echo "$KS_B64" | base64 -d > almisbar-upload.jks
+          if [ -n "$KS_PASSWORD" ]; then
+            echo "$KS_B64" | base64 -d > almisbar-upload.jks
+          else
+            sed -i 's/; signingConfig signingConfigs.release//' app/build.gradle
+          fi
           gradle :app:bundleRelease --no-daemon
       - uses: actions/upload-artifact@v4
         with:
