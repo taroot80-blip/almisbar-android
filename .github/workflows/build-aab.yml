@@ -19,6 +19,7 @@ jobs:
           KS_ALIAS: almisbar
           KS_FILE: almisbar-upload.jks
         run: |
+          sed -i "s/applicationId 'com.taroot.almisbar'/applicationId 'org.daralemaam.almisbar'/" app/build.gradle
           if [ -n "$KS_PASSWORD" ]; then
             echo "$KS_B64" | base64 -d > almisbar-upload.jks
           else
