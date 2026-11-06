@@ -1,0 +1,28 @@
+name: Build AAB
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: unzip -q -o almisbar-android-project.zip -d project
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.14.3' }
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Build
+        working-directory: project
+        env:
+          KS_B64: ${{ secrets.KS_B64 }}
+          KS_PASSWORD: ${{ secrets.KS_PASSWORD }}
+          KS_ALIAS: almisbar
+          KS_FILE: almisbar-upload.jks
+        run: |
+          echo "$KS_B64" | base64 -d > almisbar-upload.jks
+          gradle :app:bundleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: almisbar-aab
+          path: project/app/build/outputs/bundle/release/app-release.aab
