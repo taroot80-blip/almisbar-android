@@ -28,7 +28,7 @@ jobs:
             echo "::error::مفتاح الرفع غير موجود في أسرار المستودع (KS_B64 / KS_PASSWORD)"; exit 1
           fi
           echo "$KS_B64" | base64 -d > almisbar-upload.jks
-          gradle :app:bundleRelease --no-daemon
+          gradle :app:bundleRelease :app:assembleRelease --no-daemon
       - name: Verify signature
         working-directory: project
         run: |
@@ -36,7 +36,9 @@ jobs:
           jarsigner -verify "$AAB" | tail -1
           keytool -printcert -jarfile "$AAB" | grep -m1 'SHA256:' | tee ../sha256.txt
           grep -E "versionCode|versionName" app/build.gradle | tr -s ' ' | tee ../version.txt
-          mkdir -p ../out && cp "$AAB" ../out/almisbar.aab
+          APK=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" | grep -m1 SHA-256
+          mkdir -p ../out && cp "$AAB" ../out/almisbar.aab && cp "$APK" ../out/almisbar.apk
       - uses: actions/upload-artifact@v4
         with: { name: almisbar-aab, path: out/ }
       - name: Publish latest AAB
@@ -44,5 +46,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete almisbar-aab-latest --yes --cleanup-tag 2>/dev/null || true
-          gh release create almisbar-aab-latest out/almisbar.aab --title "المسبار — أحدث AAB" \
-            --notes "$(printf 'ملف AAB موقّع بمفتاح الرفع، للرفع إلى Google Play Console.\n\n%s\n\nبصمة الشهادة: %s' "$(cat version.txt)" "$(cat sha256.txt)")"
+          gh release create almisbar-aab-latest out/almisbar.aab out/almisbar.apk --title "المسبار — أحدث AAB وAPK" \
+            --notes "$(printf 'almisbar.aab للرفع إلى Google Play Console، وalmisbar.apk للتثبيت المباشر، وكلاهما موقّع بمفتاح الرفع.\n\n%s\n\nبصمة الشهادة: %s' "$(cat version.txt)" "$(cat sha256.txt)")"
