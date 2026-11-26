@@ -19,17 +19,28 @@ jobs:
       - name: Build (signed with the upload key)
         working-directory: project
         env:
+          GH_TOKEN: ${{ github.token }}
           KS_B64: ${{ secrets.KS_B64 }}
           KS_PASSWORD: ${{ secrets.KS_PASSWORD }}
           KS_ALIAS: almisbar
           KS_FILE: almisbar-upload.jks
         run: |
           if [ -z "$KS_PASSWORD" ] || [ -z "$KS_B64" ]; then
-            echo "::error::مفتاح الرفع غير موجود في أسرار المستودع (KS_B64 / KS_PASSWORD)"; exit 1
+            echo "::warning::لا مفتاح في الأسرار: تُبنى نسخة غير موقّعة لتوقيعها خارج GitHub"
+            sed -i 's/; signingConfig signingConfigs.release//' app/build.gradle
+            gradle :app:bundleRelease :app:assembleRelease --no-daemon
+            BT="$ANDROID_HOME/build-tools/36.0.0"
+            mkdir -p ../unsigned && cp app/build/outputs/bundle/release/app-release.aab ../unsigned/almisbar-unsigned.aab
+            cp app/build/outputs/apk/release/app-release-unsigned.apk ../unsigned/almisbar-unsigned.apk
+            cp "$BT/lib/apksigner.jar" "$BT/zipalign" ../unsigned/
+            cd .. && gh release delete almisbar-unsigned --yes --cleanup-tag 2>/dev/null || true
+            gh release create almisbar-unsigned unsigned/* --title "المسبار — نسخة غير موقّعة (للتوقيع)" --notes "غير صالحة للرفع قبل توقيعها بمفتاح الرفع." --latest=false
+            echo "SKIP=1" >> "$GITHUB_ENV"; exit 0
           fi
           echo "$KS_B64" | base64 -d > almisbar-upload.jks
           gradle :app:bundleRelease :app:assembleRelease --no-daemon
       - name: Verify signature
+        if: env.SKIP != '1'
         working-directory: project
         run: |
           AAB=app/build/outputs/bundle/release/app-release.aab
@@ -40,8 +51,10 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" | grep -m1 SHA-256
           mkdir -p ../out && cp "$AAB" ../out/almisbar.aab && cp "$APK" ../out/almisbar.apk
       - uses: actions/upload-artifact@v4
+        if: env.SKIP != '1'
         with: { name: almisbar-aab, path: out/ }
       - name: Publish latest AAB
+        if: env.SKIP != '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
