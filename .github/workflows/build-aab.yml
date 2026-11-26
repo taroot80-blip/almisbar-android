@@ -37,7 +37,12 @@ jobs:
             gh release create almisbar-unsigned unsigned/* --title "المسبار — نسخة غير موقّعة (للتوقيع)" --notes "غير صالحة للرفع قبل توقيعها بمفتاح الرفع." --latest=false
             echo "SKIP=1" >> "$GITHUB_ENV"; exit 0
           fi
-          echo "$KS_B64" | base64 -d > almisbar-upload.jks
+          echo "$KS_B64" | tr -d ' \r\n' | base64 -d > almisbar-upload.jks || { echo "::error::KS_B64 ليس نصًّا صالحًا"; exit 1; }
+          H=$(sha256sum almisbar-upload.jks | cut -c1-12)
+          [ "$H" = "acf430858358" ] || { echo "::error::محتوى KS_B64 ناقص أو مختلف عن ملف المفتاح (البصمة $H)"; exit 1; }
+          keytool -list -keystore almisbar-upload.jks -storepass "$KS_PASSWORD" >/dev/null 2>&1 || { echo "::error::كلمة السر KS_PASSWORD غير صحيحة لهذا المفتاح"; exit 1; }
+          keytool -list -keystore almisbar-upload.jks -storepass "$KS_PASSWORD" -alias almisbar >/dev/null 2>&1 || { echo "::error::المفتاح لا يحوي الاسم almisbar"; exit 1; }
+          echo "::notice::المفتاح وكلمة السر سليمان"
           gradle :app:bundleRelease :app:assembleRelease --no-daemon
       - name: Verify signature
         if: env.SKIP != '1'
